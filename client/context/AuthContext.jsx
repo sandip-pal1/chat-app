@@ -56,16 +56,22 @@ export const AuthProvider = ({ children }) => {
     setToken(null);
     setAuthUser(null);
     setOnlineUsers([]);
+
     axios.defaults.headers.common["token"] = null;
+
+    if (socket) {
+      socket.disconnect();
+      setSocket(null);
+    }
+
     tost.success("Logged out successfully");
-    socket.disconnect();
   };
 
   // Update profile function to handle user profile updates
 
   const updateProfile = async (body) => {
     try {
-      const { data } = await axios.put("api/auth/update-profile", body);
+      const { data } = await axios.put("/api/auth/update-profile", body);
       if (data.success) {
         setAuthUser(data.user);
         tost.success("Profile updated successfully");
@@ -78,16 +84,29 @@ export const AuthProvider = ({ children }) => {
   // Connect socket function to handle socket connection and online users updates
   const connectSocket = (userData) => {
     if (!userData || socket?.connected) return;
+
     const newSocket = io(backendUrl, {
       query: {
         userId: userData._id,
       },
+      transports: ["websocket"],
     });
-    newSocket.connect();
+
     setSocket(newSocket);
 
+    newSocket.on("connect", () => {
+      console.log("Socket connected:", newSocket.id);
+    });
+
+    newSocket.on("connect_error", (error) => {
+      console.error("Socket connection error:", error.message);
+    });
+
+    newSocket.on("disconnect", (reason) => {
+      console.log("Socket disconnected:", reason);
+    });
+
     newSocket.on("getOnlineUsers", (userIds) => {
-      //console.log("Online users received:", userIds);
       setOnlineUsers(userIds);
     });
   };
@@ -95,8 +114,8 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     if (token) {
       axios.defaults.headers.common["token"] = token;
+      checkAuth();
     }
-    checkAuth();
   }, []);
 
   const value = {
